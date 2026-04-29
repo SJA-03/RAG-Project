@@ -20,6 +20,7 @@ os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 from pipeline.rag_pipeline import RAGPipeline
+from routing.query_router import route_query
 
 
 st.set_page_config(page_title="Context-Aware Academic Assistant", layout="wide")
@@ -46,6 +47,7 @@ def main() -> None:
     )
     query = st.text_input("Question", value=DEFAULT_QUERY)
     retrieval_mode = st.selectbox("Search method", options=["Hybrid", "Reranker"])
+    use_query_routing = st.checkbox("Use Query Routing", value=False)
 
     if data_source == "Existing indexed corpus" and (not INDEX_PATH.is_file() or not CHUNKS_PATH.is_file()):
         st.warning("Embeddings not found. Please run `python src/main.py` first.")
@@ -57,7 +59,14 @@ def main() -> None:
 
         try:
             with st.spinner("Running retrieval pipeline..."):
-                contexts = _retrieve_contexts(query, retrieval_mode, data_source, uploaded_files)
+                routed_domain = route_query(query) if use_query_routing else None
+                contexts = _retrieve_contexts(
+                    query,
+                    retrieval_mode,
+                    data_source,
+                    uploaded_files,
+                    routed_domain,
+                )
         except FileNotFoundError as error:
             st.error(str(error))
             st.stop()
@@ -71,6 +80,12 @@ def main() -> None:
         if not contexts:
             st.error("No retrieval results found.")
             st.stop()
+
+        if use_query_routing:
+            if routed_domain is None:
+                st.info("Query routing result: no matching domain, using full corpus search.")
+            else:
+                st.info(f"Query routing result: `{routed_domain}`")
 
         st.subheader("LLM Final Answer")
 
@@ -105,15 +120,26 @@ def _retrieve_contexts(
     retrieval_mode: str,
     data_source: str,
     uploaded_files: list | None,
+    routed_domain: str | None,
 ) -> list[dict]:
     pipeline = get_pipeline()
 
     if data_source == "Uploaded PDFs":
         pipeline.build_from_uploaded_files(uploaded_files or [])
-        return pipeline.retrieve(query, method=retrieval_mode, top_k=DISPLAY_TOP_K)
+        return pipeline.retrieve(
+            query,
+            method=retrieval_mode,
+            top_k=DISPLAY_TOP_K,
+            domain_filter=routed_domain,
+        )
 
     pipeline.use_existing_index()
-    return pipeline.retrieve(query, method=retrieval_mode, top_k=DISPLAY_TOP_K)
+    return pipeline.retrieve(
+        query,
+        method=retrieval_mode,
+        top_k=DISPLAY_TOP_K,
+        domain_filter=routed_domain,
+    )
 
 
 def _get_score(context: dict, retrieval_mode: str) -> tuple[str, float]:

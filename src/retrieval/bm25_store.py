@@ -6,7 +6,12 @@ from rank_bm25 import BM25Okapi
 from retrieval.faiss_store import CHUNKS_FILE_NAME
 
 
-def search_bm25(query: str, top_k: int = 3, embeddings_dir: str = "embeddings") -> list[dict[str, int | float | str]]:
+def search_bm25(
+    query: str,
+    top_k: int = 3,
+    embeddings_dir: str = "embeddings",
+    domain_filter: str | None = None,
+) -> list[dict[str, int | float | str]]:
     if not query.strip():
         raise ValueError("Query must not be empty")
     if top_k <= 0:
@@ -33,11 +38,13 @@ def search_bm25(query: str, top_k: int = 3, embeddings_dir: str = "embeddings") 
         range(len(scores)),
         key=lambda index: scores[index],
         reverse=True,
-    )[:top_k]
+    )
 
     results: list[dict[str, int | float | str]] = []
     for index in ranked_indices:
         item = chunk_metadata[index]
+        if domain_filter and not _matches_domain(item.get("source", "unknown"), domain_filter):
+            continue
         results.append(
             {
                 "chunk_id": int(item["chunk_id"]),
@@ -46,9 +53,16 @@ def search_bm25(query: str, top_k: int = 3, embeddings_dir: str = "embeddings") 
                 "bm25_score": float(scores[index]),
             }
         )
+        if len(results) >= top_k:
+            break
 
     return results
 
 
 def _tokenize(text: str) -> list[str]:
     return text.lower().split()
+
+
+def _matches_domain(source: str, domain_filter: str) -> bool:
+    normalized_source = source.replace("\\", "/").lower()
+    return f"/{domain_filter.lower()}/" in normalized_source

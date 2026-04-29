@@ -9,6 +9,7 @@ def search_hybrid(
     alpha: float = 0.5,
     embeddings_dir: str = "embeddings",
     embedder: Embedder | None = None,
+    domain_filter: str | None = None,
 ) -> list[dict[str, int | float | str]]:
     if not 0.0 <= alpha <= 1.0:
         raise ValueError("alpha must be between 0.0 and 1.0")
@@ -18,11 +19,13 @@ def search_hybrid(
         top_k=top_k,
         embeddings_dir=embeddings_dir,
         embedder=embedder,
+        domain_filter=domain_filter,
     )
     sparse_results = search_bm25(
         query,
         top_k=top_k,
         embeddings_dir=embeddings_dir,
+        domain_filter=domain_filter,
     )
 
     normalized_dense_scores = _normalize_scores(dense_results, "similarity_score")

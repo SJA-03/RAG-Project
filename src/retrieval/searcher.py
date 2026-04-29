@@ -13,6 +13,7 @@ def search_chunks(
     top_k: int = 3,
     embeddings_dir: str = "embeddings",
     embedder: Embedder | None = None,
+    domain_filter: str | None = None,
 ) -> list[dict[str, int | float | str]]:
     if not query.strip():
         raise ValueError("Query must not be empty")
@@ -41,7 +42,8 @@ def search_chunks(
     active_embedder = embedder or Embedder()
     query_vector = np.array(active_embedder.embed_chunks([query]), dtype=np.float32)
 
-    scores, indices = index.search(query_vector, top_k)
+    search_k = min(len(chunk_map), max(top_k * 5, top_k))
+    scores, indices = index.search(query_vector, search_k)
 
     results: list[dict[str, int | float | str]] = []
     for chunk_index, score in zip(indices[0], scores[0]):
@@ -52,6 +54,8 @@ def search_chunks(
         chunk = chunk_map.get(normalized_chunk_index)
         if chunk is None:
             continue
+        if domain_filter and not _matches_domain(chunk["source"], domain_filter):
+            continue
 
         results.append(
             {
@@ -61,5 +65,12 @@ def search_chunks(
                 "similarity_score": float(score),
             }
         )
+        if len(results) >= top_k:
+            break
 
     return results
+
+
+def _matches_domain(source: str, domain_filter: str) -> bool:
+    normalized_source = source.replace("\\", "/").lower()
+    return f"/{domain_filter.lower()}/" in normalized_source

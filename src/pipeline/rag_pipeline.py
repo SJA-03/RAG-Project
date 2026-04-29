@@ -56,13 +56,25 @@ class RAGPipeline:
     def use_existing_index(self) -> None:
         self._mode = "existing"
 
-    def retrieve(self, query: str, method: str = "hybrid", top_k: int = 3) -> list[dict]:
+    def retrieve(
+        self,
+        query: str,
+        method: str = "hybrid",
+        top_k: int = 3,
+        domain_filter: str | None = None,
+    ) -> list[dict]:
         normalized_method = method.lower()
         if normalized_method not in {"hybrid", "reranker"}:
             raise ValueError("method must be either 'hybrid' or 'reranker'")
 
         if self._mode == "uploaded":
-            contexts = self._search_uploaded_hybrid(query, top_k=self.reranker_candidate_k)
+            contexts = self._search_uploaded_hybrid(
+                query,
+                top_k=self.reranker_candidate_k,
+                domain_filter=domain_filter,
+            )
+            if domain_filter and not contexts:
+                contexts = self._search_uploaded_hybrid(query, top_k=self.reranker_candidate_k)
             if normalized_method == "hybrid":
                 return contexts[:top_k]
 
@@ -74,7 +86,15 @@ class RAGPipeline:
             top_k=self.reranker_candidate_k,
             embeddings_dir=str(self.embeddings_dir),
             embedder=self.embedder,
+            domain_filter=domain_filter,
         )
+        if domain_filter and not contexts:
+            contexts = search_hybrid(
+                query,
+                top_k=self.reranker_candidate_k,
+                embeddings_dir=str(self.embeddings_dir),
+                embedder=self.embedder,
+            )
         if normalized_method == "hybrid":
             return contexts[:top_k]
 
@@ -134,7 +154,7 @@ class RAGPipeline:
 
         return chunk_records
 
-    def _search_uploaded_hybrid(self, query: str, top_k: int) -> list[dict]:
+    def _search_uploaded_hybrid(self, query: str, top_k: int, domain_filter: str | None = None) -> list[dict]:
         if not self._uploaded_chunk_records or self._uploaded_embeddings is None or self._uploaded_bm25 is None:
             raise ValueError("Uploaded PDF corpus has not been built yet.")
 
@@ -142,8 +162,8 @@ class RAGPipeline:
             raise ValueError("alpha must be between 0.0 and 1.0")
 
         query_vector = np.array(self.embedder.embed_chunks([query]), dtype=np.float32)
-        dense_results = self._search_uploaded_faiss(query_vector, top_k=top_k)
-        sparse_results = self._search_uploaded_bm25(query, top_k=top_k)
+        dense_results = self._search_uploaded_faiss(query_vector, top_k=top_k, domain_filter=domain_filter)
+        sparse_results = self._search_uploaded_bm25(query, top_k=top_k, domain_filter=domain_filter)
 
         normalized_dense_scores = self._normalize_scores(dense_results, "similarity_score")
         normalized_sparse_scores = self._normalize_scores(sparse_results, "bm25_score")
@@ -187,14 +207,20 @@ class RAGPipeline:
         )
         return ranked_results[:top_k]
 
-    def _search_uploaded_faiss(self, query_vector: np.ndarray, top_k: int) -> list[dict]:
+    def _search_uploaded_faiss(
+        self,
+        query_vector: np.ndarray,
+        top_k: int,
+        domain_filter: str | None = None,
+    ) -> list[dict]:
         assert self._uploaded_embeddings is not None
 
         dimension = self._uploaded_embeddings.shape[1]
         index = faiss.IndexFlatIP(dimension)
         index.add(self._uploaded_embeddings)
 
-        scores, indices = index.search(query_vector, top_k)
+        search_k = min(len(self._uploaded_chunk_records), max(top_k * 5, top_k))
+        scores, indices = index.search(query_vector, search_k)
         chunk_map = {int(chunk["chunk_id"]): chunk for chunk in self._uploaded_chunk_records}
         results: list[dict] = []
 
@@ -206,6 +232,8 @@ class RAGPipeline:
             chunk = chunk_map.get(normalized_chunk_index)
             if chunk is None:
                 continue
+            if domain_filter and not self._matches_domain(str(chunk["source"]), domain_filter):
+                continue
 
             results.append(
                 {
@@ -215,10 +243,12 @@ class RAGPipeline:
                     "similarity_score": float(score),
                 }
             )
+            if len(results) >= top_k:
+                break
 
         return results
 
-    def _search_uploaded_bm25(self, query: str, top_k: int) -> list[dict]:
+    def _search_uploaded_bm25(self, query: str, top_k: int, domain_filter: str | None = None) -> list[dict]:
         assert self._uploaded_bm25 is not None
 
         scores = self._uploaded_bm25.get_scores(self._tokenize(query))
@@ -226,11 +256,13 @@ class RAGPipeline:
             range(len(scores)),
             key=lambda index: scores[index],
             reverse=True,
-        )[:top_k]
+        )
 
         results: list[dict] = []
         for index in ranked_indices:
             chunk = self._uploaded_chunk_records[index]
+            if domain_filter and not self._matches_domain(str(chunk["source"]), domain_filter):
+                continue
             results.append(
                 {
                     "chunk_id": int(chunk["chunk_id"]),
@@ -239,6 +271,8 @@ class RAGPipeline:
                     "bm25_score": float(scores[index]),
                 }
             )
+            if len(results) >= top_k:
+                break
 
         return results
 
@@ -272,3 +306,14 @@ class RAGPipeline:
     @staticmethod
     def _tokenize(text: str) -> list[str]:
         return text.lower().split()
+
+    @staticmethod
+    def _matches_domain(source: str, domain_filter: str) -> bool:
+        normalized_source = source.replace("\\", "/").lower()
+        normalized_domain = domain_filter.lower()
+
+        if f"/{normalized_domain}/" in normalized_source:
+            return True
+
+        file_name = normalized_source.rsplit("/", maxsplit=1)[-1]
+        return file_name.startswith(f"{normalized_domain}_") or file_name.startswith(f"{normalized_domain}-")
