@@ -35,6 +35,7 @@ def search_hybrid(
         combined_results[chunk_id] = {
             "chunk_id": chunk_id,
             "text": result["text"],
+            "source": result.get("source", "unknown"),
             "dense_score": normalized_dense_scores[chunk_id],
             "sparse_score": 0.0,
             "final_score": alpha * normalized_dense_scores[chunk_id],
@@ -54,6 +55,7 @@ def search_hybrid(
         combined_results[chunk_id] = {
             "chunk_id": chunk_id,
             "text": result["text"],
+            "source": result.get("source", "unknown"),
             "dense_score": 0.0,
             "sparse_score": normalized_sparse_score,
             "final_score": (1.0 - alpha) * normalized_sparse_score,

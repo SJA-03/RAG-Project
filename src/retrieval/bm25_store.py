@@ -42,6 +42,7 @@ def search_bm25(query: str, top_k: int = 3, embeddings_dir: str = "embeddings") 
             {
                 "chunk_id": int(item["chunk_id"]),
                 "text": item["text"],
+                "source": item.get("source", "unknown"),
                 "bm25_score": float(scores[index]),
             }
         )

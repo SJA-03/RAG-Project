@@ -30,7 +30,13 @@ def search_chunks(
 
     index = faiss.read_index(str(index_path))
     chunk_metadata = json.loads(chunks_path.read_text(encoding="utf-8"))
-    chunk_map = {item["chunk_id"]: item["text"] for item in chunk_metadata}
+    chunk_map = {
+        int(item["chunk_id"]): {
+            "text": item["text"],
+            "source": item.get("source", "unknown"),
+        }
+        for item in chunk_metadata
+    }
 
     active_embedder = embedder or Embedder()
     query_vector = np.array(active_embedder.embed_chunks([query]), dtype=np.float32)
@@ -43,14 +49,15 @@ def search_chunks(
             continue
 
         normalized_chunk_index = int(chunk_index)
-        chunk_text = chunk_map.get(normalized_chunk_index)
-        if chunk_text is None:
+        chunk = chunk_map.get(normalized_chunk_index)
+        if chunk is None:
             continue
 
         results.append(
             {
                 "chunk_id": normalized_chunk_index,
-                "text": chunk_text,
+                "text": chunk["text"],
+                "source": chunk["source"],
                 "similarity_score": float(score),
             }
         )
