@@ -16,17 +16,20 @@ def main() -> int:
         text = load_pdf(file_path)
         chunks = chunk_text(text)
         from embedding.embedder import Embedder
+        from reranker.reranker import Reranker
         from retrieval.bm25_store import search_bm25
         from retrieval.faiss_store import save_faiss_index
         from retrieval.hybrid_searcher import search_hybrid
         from retrieval.searcher import search_chunks
 
         embedder = Embedder()
+        reranker = Reranker()
         embeddings = embedder.embed_chunks(chunks)
         index_path, chunks_path = save_faiss_index(embeddings, chunks)
         faiss_results = search_chunks(query, embedder=embedder)
         bm25_results = search_bm25(query)
         hybrid_results = search_hybrid(query, embedder=embedder)
+        reranked_results = reranker.rerank(query, hybrid_results)
     except FileNotFoundError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -71,6 +74,16 @@ def main() -> int:
         print(f"   Dense score: {result['dense_score']:.4f}")
         print(f"   Sparse score: {result['sparse_score']:.4f}")
         print(f"   Final score: {result['final_score']:.4f}")
+        print(f"   Chunk text: {result['text']}")
+
+    print("Reranker results:")
+
+    for index, result in enumerate(reranked_results, start=1):
+        print(f"{index}. Chunk ID: {result['chunk_id']}")
+        print(f"   Dense score: {result['dense_score']:.4f}")
+        print(f"   Sparse score: {result['sparse_score']:.4f}")
+        print(f"   Final score: {result['final_score']:.4f}")
+        print(f"   Reranker score: {result['reranker_score']:.4f}")
         print(f"   Chunk text: {result['text']}")
 
     return 0
