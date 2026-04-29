@@ -1,0 +1,14 @@
+pdfplumber==0.11.4
+Pillow==10.4.0
+
+sentence-transformers==3.0.1
+faiss-cpu==1.8.0
+rank-bm25==0.2.2
+
+fastapi==0.115.0
+uvicorn==0.30.6
+streamlit==1.37.1
+
+numpy==1.26.4
+scikit-learn==1.5.1
+tqdm==4.66.5
