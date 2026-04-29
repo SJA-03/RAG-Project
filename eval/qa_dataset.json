@@ -4,11 +4,55 @@
     "expected_chunk_ids": [1, 2, 4]
   },
   {
+    "question": "Why are processes needed in an operating system?",
+    "expected_chunk_ids": [2]
+  },
+  {
+    "question": "When does a program become a process?",
+    "expected_chunk_ids": [4]
+  },
+  {
+    "question": "What sections are included in the memory layout of a process?",
+    "expected_chunk_ids": [2, 3]
+  },
+  {
+    "question": "What states can a process be in?",
+    "expected_chunk_ids": [12, 13]
+  },
+  {
+    "question": "What is a process control block?",
+    "expected_chunk_ids": [14]
+  },
+  {
     "question": "What information is stored in a process control block?",
     "expected_chunk_ids": [14, 15]
   },
   {
+    "question": "How should process scheduling balance I/O-bound and CPU-bound processes?",
+    "expected_chunk_ids": [16]
+  },
+  {
+    "question": "What does the CPU scheduler do?",
+    "expected_chunk_ids": [18]
+  },
+  {
+    "question": "What happens during a context switch?",
+    "expected_chunk_ids": [19]
+  },
+  {
     "question": "What is the difference between process switching and mode switching?",
     "expected_chunk_ids": [21, 22, 24, 25, 26]
+  },
+  {
+    "question": "What events can cause user-to-kernel mode switching?",
+    "expected_chunk_ids": [22, 23]
+  },
+  {
+    "question": "What happens during each mode switching event?",
+    "expected_chunk_ids": [24]
+  },
+  {
+    "question": "What is the role of systemd in process creation on Linux?",
+    "expected_chunk_ids": [29, 30]
   }
 ]
