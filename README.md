@@ -2,6 +2,9 @@
 
 > **멀티 PDF 기반 Hybrid Retrieval + Reranker를 적용한 End-to-End RAG 시스템**
 
+<img width="1418" height="734" alt="스크린샷 2026-04-29 오후 6 01 18" src="https://github.com/user-attachments/assets/18c51667-238a-445c-8181-f7abc62d502c" />
+
+
 ---
 
 ## 🚀 Overview
