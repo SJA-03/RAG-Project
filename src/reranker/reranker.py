@@ -1,3 +1,4 @@
+import os
 from copy import deepcopy
 
 from sentence_transformers import CrossEncoder
@@ -9,7 +10,10 @@ MODEL_NAME = "cross-encoder/ms-marco-MiniLM-L-6-v2"
 class Reranker:
     def __init__(self, model_name: str = MODEL_NAME) -> None:
         self.model_name = model_name
-        self.model = CrossEncoder(model_name)
+        self.model = CrossEncoder(
+            model_name,
+            local_files_only=_use_local_files_only(),
+        )
 
     def rerank(self, query: str, candidates: list[dict], top_k: int = 3) -> list[dict]:
         if not query.strip():
@@ -35,3 +39,7 @@ class Reranker:
 def rerank(query: str, candidates: list[dict], top_k: int = 3) -> list[dict]:
     reranker = Reranker()
     return reranker.rerank(query, candidates, top_k=top_k)
+
+
+def _use_local_files_only() -> bool:
+    return os.getenv("HF_HUB_OFFLINE") == "1" or os.getenv("TRANSFORMERS_OFFLINE") == "1"
