@@ -13,7 +13,7 @@ def search_chunks(
     top_k: int = 3,
     embeddings_dir: str = "embeddings",
     embedder: Embedder | None = None,
-) -> list[dict[str, float | str]]:
+) -> list[dict[str, int | float | str]]:
     if not query.strip():
         raise ValueError("Query must not be empty")
     if top_k <= 0:
@@ -37,18 +37,20 @@ def search_chunks(
 
     scores, indices = index.search(query_vector, top_k)
 
-    results: list[dict[str, float | str]] = []
+    results: list[dict[str, int | float | str]] = []
     for chunk_index, score in zip(indices[0], scores[0]):
         if chunk_index < 0:
             continue
 
-        chunk_text = chunk_map.get(int(chunk_index))
+        normalized_chunk_index = int(chunk_index)
+        chunk_text = chunk_map.get(normalized_chunk_index)
         if chunk_text is None:
             continue
 
         results.append(
             {
-                "chunk_text": chunk_text,
+                "chunk_id": normalized_chunk_index,
+                "text": chunk_text,
                 "similarity_score": float(score),
             }
         )

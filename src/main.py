@@ -18,6 +18,7 @@ def main() -> int:
         from embedding.embedder import Embedder
         from retrieval.bm25_store import search_bm25
         from retrieval.faiss_store import save_faiss_index
+        from retrieval.hybrid_searcher import search_hybrid
         from retrieval.searcher import search_chunks
 
         embedder = Embedder()
@@ -25,6 +26,7 @@ def main() -> int:
         index_path, chunks_path = save_faiss_index(embeddings, chunks)
         faiss_results = search_chunks(query, embedder=embedder)
         bm25_results = search_bm25(query)
+        hybrid_results = search_hybrid(query, embedder=embedder)
     except FileNotFoundError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -51,14 +53,24 @@ def main() -> int:
     print("FAISS search results:")
 
     for index, result in enumerate(faiss_results, start=1):
-        print(f"{index}. Similarity score: {result['similarity_score']:.4f}")
-        print(f"   Chunk text: {result['chunk_text']}")
+        print(f"{index}. Chunk ID: {result['chunk_id']}")
+        print(f"   Similarity score: {result['similarity_score']:.4f}")
+        print(f"   Chunk text: {result['text']}")
 
     print("BM25 search results:")
 
     for index, result in enumerate(bm25_results, start=1):
         print(f"{index}. Chunk ID: {result['chunk_id']}")
         print(f"   BM25 score: {result['bm25_score']:.4f}")
+        print(f"   Chunk text: {result['text']}")
+
+    print("Hybrid search results:")
+
+    for index, result in enumerate(hybrid_results, start=1):
+        print(f"{index}. Chunk ID: {result['chunk_id']}")
+        print(f"   Dense score: {result['dense_score']:.4f}")
+        print(f"   Sparse score: {result['sparse_score']:.4f}")
+        print(f"   Final score: {result['final_score']:.4f}")
         print(f"   Chunk text: {result['text']}")
 
     return 0
