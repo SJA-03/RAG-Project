@@ -16,13 +16,15 @@ def main() -> int:
         text = load_pdf(file_path)
         chunks = chunk_text(text)
         from embedding.embedder import Embedder
+        from retrieval.bm25_store import search_bm25
         from retrieval.faiss_store import save_faiss_index
         from retrieval.searcher import search_chunks
 
         embedder = Embedder()
         embeddings = embedder.embed_chunks(chunks)
         index_path, chunks_path = save_faiss_index(embeddings, chunks)
-        search_results = search_chunks(query, embedder=embedder)
+        faiss_results = search_chunks(query, embedder=embedder)
+        bm25_results = search_bm25(query)
     except FileNotFoundError as error:
         print(f"Error: {error}", file=sys.stderr)
         return 1
@@ -46,11 +48,18 @@ def main() -> int:
     print(f"Saved chunk metadata to: {chunks_path}")
     print("Embedding and FAISS storage completed successfully.")
     print(f"Query: {query}")
-    print("Top search results:")
+    print("FAISS search results:")
 
-    for index, result in enumerate(search_results, start=1):
+    for index, result in enumerate(faiss_results, start=1):
         print(f"{index}. Similarity score: {result['similarity_score']:.4f}")
         print(f"   Chunk text: {result['chunk_text']}")
+
+    print("BM25 search results:")
+
+    for index, result in enumerate(bm25_results, start=1):
+        print(f"{index}. Chunk ID: {result['chunk_id']}")
+        print(f"   BM25 score: {result['bm25_score']:.4f}")
+        print(f"   Chunk text: {result['text']}")
 
     return 0
 
