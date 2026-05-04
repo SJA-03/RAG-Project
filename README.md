@@ -1,68 +1,58 @@
 # 📚 Context-Aware RAG System
 
-> **Multi-PDF 기반 Hybrid Retrieval + Reranker + Query Routing을 적용한 End-to-End RAG 시스템**
-
-<img width="1418" height="734" alt="스크린샷 2026-04-29 오후 6 01 18" src="https://github.com/user-attachments/assets/18c51667-238a-445c-8181-f7abc62d502c" />
+> **Multi-PDF 기반 Hybrid Retrieval + Reranker + Query Routing + FastAPI Backend를 적용한 End-to-End RAG 시스템**
 
 ---
 
 ## 🚀 Overview
 
-이 프로젝트는 여러 도메인의 학습 자료(PDF)를 기반으로 질문에 답변하는 **Context-aware Retrieval-Augmented Generation (RAG) 시스템**입니다.
+이 프로젝트는 여러 도메인의 PDF 문서를 기반으로 질문에 답변하는
+**Context-aware Retrieval-Augmented Generation (RAG) 시스템**입니다.
 
-단순한 LLM 응답을 넘어서,
-**검색 품질 개선 → 정량 평가 → 도메인 라우팅 → 답변 생성**까지 포함한 전체 파이프라인을 설계 및 구현했습니다.
+단순한 LLM 응답을 넘어서:
+
+* 검색 품질 개선 (Hybrid + Reranker)
+* 정량 평가 (Hit@K, MRR)
+* 도메인 라우팅 (Query Routing)
+* 서비스 구조 (FastAPI + Streamlit 분리)
+
+까지 포함한 **실서비스 수준의 AI 시스템**을 구현했습니다.
 
 ---
 
 ## ✨ Key Features
 
-### 📂 1. Multi-PDF Ingestion
+### 📂 Multi-PDF Ingestion
 
-* 여러 PDF 업로드 지원 (Streamlit UI)
+* 여러 PDF 업로드 지원
 * pdfplumber 기반 텍스트 추출
-* chunk metadata에 source 정보 포함
-* 다양한 도메인(OS, ML 등) 확장 가능
+* chunk 단위 분할 + source metadata
 
 ---
 
-### 🔍 2. Advanced Retrieval Pipeline
+### 🔍 Hybrid Retrieval ⭐
 
-#### 🔹 Dense Retrieval (FAISS)
-
-* SentenceTransformer 기반 embedding
-* semantic similarity 검색
-
-#### 🔹 Sparse Retrieval (BM25)
-
-* keyword 기반 검색
-* exact match 보완
-
-#### 🔹 Hybrid Retrieval ⭐
+* FAISS (Dense) + BM25 (Sparse)
+* score normalization 기반 결합
 
 ```text
 final_score = α * dense + (1 - α) * sparse
 ```
 
-* Dense + Sparse 결합
-* score normalization 적용
-* 안정적인 retrieval 성능 확보
-
 ---
 
-### 🧠 3. Reranker (Cross-Encoder)
+### 🧠 Reranker (Cross-Encoder)
 
-* `cross-encoder/ms-marco-MiniLM-L-6-v2`
-* query-document relevance 직접 학습된 모델
+* query-document relevance 직접 평가
 * retrieval 결과 재정렬
+* ranking quality 개선
 
 ---
 
-### 🧭 4. Query Routing ⭐
+### 🧭 Query Routing ⭐
 
-* rule-based lightweight router
-* query 기반 도메인 자동 추정 (OS, ML 등)
-* 해당 도메인 chunk만 우선 검색
+* query 기반 도메인 자동 추정
+* 해당 domain 문서만 검색
 
 ```text
 Query → Domain Detection → Filtered Retrieval
@@ -70,45 +60,44 @@ Query → Domain Detection → Filtered Retrieval
 
 ---
 
-### 📊 5. Evaluation Pipeline
+### 📊 Evaluation Pipeline
 
 * Hit@1 / Hit@3 / Hit@5
-* MRR (Mean Reciprocal Rank)
-* Retrieval 성능 정량 분석
+* MRR
+* retrieval 성능 정량 분석
 
 ---
 
-### 🤖 6. LLM Answer Generation
+### 🤖 LLM Answer Generation
 
-* OpenAI API 기반 답변 생성
-* retrieved context 기반 응답
-* hallucination 방지 프롬프트 적용
+* OpenAI API 기반
+* retrieved context 기반 답변 생성
+* hallucination 최소화
 
 ---
 
-### 🖥️ 7. Streamlit UI
+### 🖥️ Frontend (Streamlit)
 
-* FastAPI backend 연동 기반 인터랙티브 UI
+* PDF 업로드
 * 검색 방식 선택 (Hybrid / Reranker)
-* Query Routing 활성화 옵션
-* 답변 + 근거(context + source) + score 시각화
+* Query Routing ON/OFF
+* 답변 + 근거 + score 시각화
 
 ---
 
-### 🌐 8. FastAPI Backend
+### ⚙️ Backend (FastAPI) ⭐
 
-* `POST /rag/query`로 PDF 업로드 + 질문 처리
-* Streamlit은 backend API를 호출하는 client 역할
-* `GET /health`로 서버 상태 확인 가능
+* REST API 기반 RAG 서비스
+* `/rag/query` 엔드포인트
+* multipart PDF 업로드 지원
+* UI와 완전 분리된 구조
 
 ---
 
 ## 🏗️ Architecture
 
 ```text
-User Query
-   ↓
-Streamlit Client
+User (Streamlit UI)
    ↓
 FastAPI Backend
    ↓
@@ -116,15 +105,15 @@ Query Routing
    ↓
 Domain Filtered Retrieval
    ↓
-FAISS (Dense) + BM25 (Sparse)
+FAISS + BM25
    ↓
 Hybrid Retrieval
    ↓
 Reranker
    ↓
-LLM (Answer Generation)
+LLM
    ↓
-Final Answer + Context + Source
+Final Answer + Context
 ```
 
 ---
@@ -138,18 +127,7 @@ Final Answer + Context + Source
 | Hybrid   | 0.64     | 0.93     | 1.00     | 0.77     |
 | Reranker | **0.79** | **1.00** | **1.00** | **0.88** |
 
-> Hybrid retrieval을 통해 안정적인 성능 개선을 달성했고,
-> Cross-Encoder reranker가 Hit@1 기준 가장 높은 성능을 보였습니다.
-
----
-
-## 🧠 Key Insights
-
-* Dense retrieval만으로는 ranking 정확도가 부족함
-* Sparse retrieval은 특정 query에 강하지만 일반화 성능이 제한적임
-* Hybrid retrieval이 안정적인 성능 개선을 제공
-* Reranker는 ranking quality를 크게 향상
-* Query Routing을 통해 검색 공간을 줄이고 relevance 향상 가능
+> Reranker가 Hit@1 기준 가장 큰 성능 개선을 보였습니다.
 
 ---
 
@@ -162,7 +140,6 @@ Final Answer + Context + Source
 * rank-bm25
 * Cross-Encoder
 * OpenAI API
-* Requests
 * FastAPI
 * Streamlit
 
@@ -188,29 +165,31 @@ pip install -r requirements.txt
 export OPENAI_API_KEY="your_api_key"
 ```
 
----
+또는 `.env` 사용:
 
-## ▶️ Run
-
-### CLI 실행
-
-```bash
-python src/main.py
+```text
+OPENAI_API_KEY=your_api_key
 ```
 
 ---
 
-### FastAPI 실행
+## ▶️ Run
+
+### 1️⃣ Backend (FastAPI)
 
 ```bash
 uvicorn api.main:app --reload
 ```
 
+헬스 체크:
+
+```bash
+curl http://127.0.0.1:8000/health
+```
+
 ---
 
-### Streamlit UI 실행
-
-FastAPI 서버를 먼저 실행한 뒤:
+### 2️⃣ Frontend (Streamlit)
 
 ```bash
 streamlit run app/streamlit_app.py
@@ -218,19 +197,37 @@ streamlit run app/streamlit_app.py
 
 ---
 
+### 3️⃣ API Docs
+
+```text
+http://127.0.0.1:8000/docs
+```
+
+---
+
 ## 📌 Future Work
 
-* Embedding-based Query Routing (semantic routing)
+* Embedding-based Query Routing
 * Reranker fine-tuning
 * Multi-domain dataset 확장
-* Latency optimization (caching)
-* Cloud deployment (Streamlit / HF Spaces)
+* Caching / latency optimization
+* Cloud deployment
+
+---
+
+## 🧠 Key Insight
+
+* Dense retrieval은 의미 이해에 강하지만 ranking이 불안정
+* Sparse retrieval은 정확하지만 일반화가 약함
+* Hybrid retrieval이 안정적인 성능 제공
+* Reranker가 ranking 품질을 크게 개선
+* Query Routing으로 검색 공간을 줄여 효율 향상
 
 ---
 
 ## 👨‍💻 Author
 
 * AI Engineer Portfolio Project
-* End-to-End RAG system design & implementation
+* End-to-End RAG System Design & Implementation
 
 ---
