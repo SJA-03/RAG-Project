@@ -24,12 +24,14 @@ class RAGPipeline:
         embeddings_dir: str = "embeddings",
         alpha: float = 0.5,
         reranker_candidate_k: int = 10,
+        embedder: Embedder | None = None,
+        reranker: Reranker | None = None,
     ) -> None:
         self.embeddings_dir = Path(embeddings_dir)
         self.alpha = alpha
         self.reranker_candidate_k = reranker_candidate_k
-        self.embedder = Embedder()
-        self.reranker = Reranker()
+        self.embedder = embedder or Embedder()
+        self.reranker = reranker or Reranker()
 
         self._uploaded_chunk_records: list[dict[str, str | int]] = []
         self._uploaded_embeddings: np.ndarray | None = None

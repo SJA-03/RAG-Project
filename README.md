@@ -88,10 +88,18 @@ Query → Domain Detection → Filtered Retrieval
 
 ### 🖥️ 7. Streamlit UI
 
-* PDF 업로드 기반 인터랙티브 UI
+* FastAPI backend 연동 기반 인터랙티브 UI
 * 검색 방식 선택 (Hybrid / Reranker)
 * Query Routing 활성화 옵션
 * 답변 + 근거(context + source) + score 시각화
+
+---
+
+### 🌐 8. FastAPI Backend
+
+* `POST /rag/query`로 PDF 업로드 + 질문 처리
+* Streamlit은 backend API를 호출하는 client 역할
+* `GET /health`로 서버 상태 확인 가능
 
 ---
 
@@ -99,6 +107,10 @@ Query → Domain Detection → Filtered Retrieval
 
 ```text
 User Query
+   ↓
+Streamlit Client
+   ↓
+FastAPI Backend
    ↓
 Query Routing
    ↓
@@ -150,6 +162,8 @@ Final Answer + Context + Source
 * rank-bm25
 * Cross-Encoder
 * OpenAI API
+* Requests
+* FastAPI
 * Streamlit
 
 ---
@@ -186,7 +200,17 @@ python src/main.py
 
 ---
 
+### FastAPI 실행
+
+```bash
+uvicorn api.main:app --reload
+```
+
+---
+
 ### Streamlit UI 실행
+
+FastAPI 서버를 먼저 실행한 뒤:
 
 ```bash
 streamlit run app/streamlit_app.py

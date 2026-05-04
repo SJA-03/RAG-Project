@@ -1,34 +1,25 @@
 import os
-import sys
 from pathlib import Path
 
+import requests
 import streamlit as st
+from dotenv import load_dotenv
+load_dotenv()
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-SRC_ROOT = REPO_ROOT / "src"
 EMBEDDINGS_DIR = REPO_ROOT / "embeddings"
 INDEX_PATH = EMBEDDINGS_DIR / "faiss.index"
 CHUNKS_PATH = EMBEDDINGS_DIR / "chunks.json"
 DEFAULT_QUERY = "What is a process in operating systems?"
-DISPLAY_TOP_K = 3
-
-if str(SRC_ROOT) not in sys.path:
-    sys.path.insert(0, str(SRC_ROOT))
+API_BASE_URL = os.getenv("RAG_API_URL", "http://127.0.0.1:8000").rstrip("/")
+RAG_QUERY_URL = f"{API_BASE_URL}/rag/query"
 
 os.environ.setdefault("HF_HUB_OFFLINE", "1")
 os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
-from pipeline.rag_pipeline import RAGPipeline
-from routing.query_router import route_query
-
 
 st.set_page_config(page_title="Context-Aware Academic Assistant", layout="wide")
-
-
-@st.cache_resource
-def get_pipeline() -> RAGPipeline:
-    return RAGPipeline(embeddings_dir=str(EMBEDDINGS_DIR))
 
 
 def main() -> None:
@@ -59,22 +50,24 @@ def main() -> None:
 
         try:
             with st.spinner("Running retrieval pipeline..."):
-                routed_domain = route_query(query) if use_query_routing else None
-                contexts = _retrieve_contexts(
+                response_payload = _request_rag(
                     query,
                     retrieval_mode,
                     data_source,
                     uploaded_files,
-                    routed_domain,
+                    use_query_routing,
                 )
-        except FileNotFoundError as error:
-            st.error(str(error))
-            st.stop()
+                answer = str(response_payload.get("answer", ""))
+                contexts = response_payload.get("contexts", [])
+                routed_domain = response_payload.get("routed_domain")
         except ValueError as error:
             st.error(str(error))
             st.stop()
+        except RuntimeError as error:
+            st.error(str(error))
+            st.stop()
         except Exception as error:
-            st.error(f"Failed to process PDFs: {error}")
+            st.error(f"Failed to call FastAPI backend: {error}")
             st.stop()
 
         if not contexts:
@@ -88,19 +81,10 @@ def main() -> None:
                 st.info(f"Query routing result: `{routed_domain}`")
 
         st.subheader("LLM Final Answer")
-
-        if not os.getenv("OPENAI_API_KEY"):
-            st.info("OPENAI_API_KEY is not set. Showing retrieval results only.")
-            st.code('export OPENAI_API_KEY="your_api_key_here"', language="bash")
+        if answer.strip():
+            st.write(answer)
         else:
-            try:
-                with st.spinner("Generating grounded answer with OpenAI..."):
-                    answer = get_pipeline().generate_answer(query, contexts)
-                st.write(answer)
-            except ImportError as error:
-                st.warning(str(error))
-            except Exception as error:
-                st.error(f"LLM answer generation failed: {error}")
+            st.info("No LLM answer was returned. Check the FastAPI backend configuration if you expected one.")
 
         st.subheader("Retrieved Contexts")
         for index, context in enumerate(contexts, start=1):
@@ -115,31 +99,59 @@ def main() -> None:
                 st.write(context["text"])
 
 
-def _retrieve_contexts(
+def _request_rag(
     query: str,
     retrieval_mode: str,
     data_source: str,
     uploaded_files: list | None,
-    routed_domain: str | None,
-) -> list[dict]:
-    pipeline = get_pipeline()
+    use_query_routing: bool,
+) -> dict:
+    if data_source == "Uploaded PDFs" and not uploaded_files:
+        raise ValueError("Please upload at least one PDF file.")
+
+    form_data = {
+        "query": query,
+        "method": retrieval_mode.lower(),
+        "use_routing": str(use_query_routing).lower(),
+    }
+    request_files = []
 
     if data_source == "Uploaded PDFs":
-        pipeline.build_from_uploaded_files(uploaded_files or [])
-        return pipeline.retrieve(
-            query,
-            method=retrieval_mode,
-            top_k=DISPLAY_TOP_K,
-            domain_filter=routed_domain,
-        )
+        request_files = [
+            ("files", (uploaded_file.name, uploaded_file.getvalue(), "application/pdf"))
+            for uploaded_file in (uploaded_files or [])
+        ]
 
-    pipeline.use_existing_index()
-    return pipeline.retrieve(
-        query,
-        method=retrieval_mode,
-        top_k=DISPLAY_TOP_K,
-        domain_filter=routed_domain,
-    )
+    try:
+        response = requests.post(
+            RAG_QUERY_URL,
+            data=form_data,
+            files=request_files or None,
+            timeout=300,
+        )
+    except requests.RequestException as error:
+        raise RuntimeError(
+            f"FastAPI backend is not reachable at {RAG_QUERY_URL}. Start it with `uvicorn api.main:app --reload`."
+        ) from error
+
+    if response.ok:
+        return response.json()
+
+    detail = _extract_error_detail(response)
+    raise RuntimeError(detail)
+
+
+def _extract_error_detail(response: requests.Response) -> str:
+    try:
+        payload = response.json()
+    except ValueError:
+        return f"FastAPI backend returned HTTP {response.status_code}."
+
+    detail = payload.get("detail")
+    if isinstance(detail, str):
+        return detail
+
+    return f"FastAPI backend returned HTTP {response.status_code}."
 
 
 def _get_score(context: dict, retrieval_mode: str) -> tuple[str, float]:
